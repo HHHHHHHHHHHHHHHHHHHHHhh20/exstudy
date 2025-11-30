@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaiP智能聊天室 - 登录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* 登录页面特定样式 */
+        .login-container {
+            max-width: 400px;
+            margin: 100px auto;
+            padding: 30px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 20px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+        
+        .login-container h1 {
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #666;
+            font-weight: 500;
+        }
+        
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+            box-sizing: border-box;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        
+        .login-button {
+            width: 100%;
+            padding: 12px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        
+        .login-button:hover {
+            background-color: #45a049;
+        }
+        
+        .login-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        .error-message {
+            background-color: #f44336;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            text-align: center;
+        }
+        
+        .username-check {
+            margin-top: 5px;
+            font-size: 14px;
+        }
+        
+        .username-check.valid {
+            color: #4CAF50;
+        }
+        
+        .username-check.invalid {
+            color: #f44336;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <h1>DaiP智能聊天室</h1>
+        
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form id="login-form" action="/chat" method="get">
+            <div class="form-group">
+                <label for="username">昵称</label>
+                <input type="text" id="username" name="username" placeholder="请输入您的昵称" required>
+                <div id="username-check" class="username-check"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="server">服务器地址</label>
+                <select id="server" name="server" required>
+                    {% for server in servers %}
+                    <option value="{{ server }}">{{ server }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            
+            <button type="submit" id="login-btn" class="login-button">登录</button>
+        </form>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const usernameInput = $('#username');
+            const usernameCheck = $('#username-check');
+            const loginBtn = $('#login-btn');
+            
+            // 实时检查用户名是否已存在
+            usernameInput.on('input', function() {
+                const username = $(this).val().trim();
+                
+                if (username.length < 1) {
+                    usernameCheck.text('');
+                    return;
+                }
+                
+                $.ajax({
+                    url: '/check_username',
+                    type: 'POST',
+                    contentType: 'application/json',
+                    data: JSON.stringify({ username: username }),
+                    success: function(response) {
+                        if (response.exists) {
+                            usernameCheck.text('该昵称已被使用，请选择其他昵称');
+                            usernameCheck.removeClass('valid').addClass('invalid');
+                            loginBtn.prop('disabled', true);
+                        } else {
+                            usernameCheck.text('昵称可用');
+                            usernameCheck.removeClass('invalid').addClass('valid');
+                            loginBtn.prop('disabled', false);
+                        }
+                    },
+                    error: function() {
+                        usernameCheck.text('检查失败，请稍后重试');
+                        usernameCheck.removeClass('valid').addClass('invalid');
+                    }
+                });
+            });
+            
+            // 表单提交前检查
+            $('#login-form').on('submit', function(e) {
+                const username = usernameInput.val().trim();
+                
+                if (!username) {
+                    e.preventDefault();
+                    usernameCheck.text('昵称不能为空');
+                    usernameCheck.removeClass('valid').addClass('invalid');
+                }
+            });
+        });
+    </script>
+</body>
+</html>

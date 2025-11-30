@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaiP智能聊天室</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <style>
+        /* 聊天室整体布局 */
+        .chat-container {
+            display: flex;
+            height: 100vh;
+            background-color: #f5f5f5;
+        }
+        
+        /* 侧边栏 - 用户列表 */
+        .sidebar {
+            width: 280px;
+            background-color: #2c3e50;
+            color: white;
+            display: flex;
+            flex-direction: column;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.1);
+        }
+        
+        .sidebar-header {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid #34495e;
+        }
+        
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 20px;
+        }
+        
+        .user-count {
+            font-size: 14px;
+            color: #bdc3c7;
+            margin-top: 5px;
+        }
+        
+        .user-list {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 12px;
+            margin-bottom: 8px;
+            background-color: #34495e;
+            border-radius: 8px;
+            transition: background-color 0.3s;
+        }
+        
+        .user-item:hover {
+            background-color: #3c5a73;
+        }
+        
+        .user-avatar {
+            width: 36px;
+            height: 36px;
+            background-color: #4CAF50;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-right: 12px;
+        }
+        
+        .user-name {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .self-indicator {
+            font-size: 12px;
+            color: #bdc3c7;
+            font-style: italic;
+        }
+        
+        /* 主聊天区域 */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background-color: #ffffff;
+        }
+        
+        .chat-header {
+            padding: 15px 20px;
+            background-color: #ffffff;
+            border-bottom: 1px solid #e1e1e1;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .chat-title {
+            font-size: 18px;
+            font-weight: bold;
+            color: #333;
+        }
+        
+        .exit-button {
+            padding: 8px 16px;
+            background-color: #f44336;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 14px;
+        }
+        
+        .exit-button:hover {
+            background-color: #d32f2f;
+        }
+        
+        /* 消息区域 */
+        .messages-container {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background-color: #fafafa;
+        }
+        
+        .message {n            margin-bottom: 20px;
+            max-width: 70%;
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.self {
+            margin-left: auto;
+        }
+        
+        .message-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .message-user {
+            font-weight: bold;
+            font-size: 14px;
+            margin-right: 10px;
+        }
+        
+        .message.self .message-user {
+            color: #4CAF50;
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: #999;
+        }
+        
+        .message-content {
+            background-color: #f1f1f1;
+            padding: 12px 16px;
+            border-radius: 12px;
+            word-wrap: break-word;
+            line-height: 1.5;
+        }
+        
+        .message.self .message-content {
+            background-color: #4CAF50;
+            color: white;
+        }
+        
+        /* AI助手消息样式 */
+        .ai-message {
+            background-color: #e3f2fd;
+            padding: 15px;
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border-left: 4px solid #2196F3;
+        }
+        
+        .ai-message .ai-name {
+            font-weight: bold;
+            color: #1976D2;
+            margin-bottom: 8px;
+        }
+        
+        .ai-message .ai-content {
+            color: #333;
+            line-height: 1.5;
+        }
+        
+        /* 系统消息样式 */
+        .system-message {
+            text-align: center;
+            margin: 15px 0;
+        }
+        
+        .system-message span {
+            background-color: #e0e0e0;
+            color: #666;
+            padding: 5px 15px;
+            border-radius: 20px;
+            font-size: 13px;
+        }
+        
+        /* 电影播放器样式 */
+        .movie-container {
+            background-color: #000;
+            border-radius: 12px;
+            margin: 20px 0;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+        }
+        
+        .movie-header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 10px 15px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .movie-title {
+            font-weight: bold;
+        }
+        
+        .movie-controls button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            margin-left: 10px;
+            font-size: 16px;
+        }
+        
+        .movie-player {
+            width: 100%;
+            min-height: 400px;
+            border: none;
+        }
+        
+        /* 输入区域 */
+        .input-area {
+            padding: 20px;
+            background-color: #ffffff;
+            border-top: 1px solid #e1e1e1;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.05);
+        }
+        
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 10px;
+        }
+        
+        #message-input {
+            flex: 1;
+            min-height: 40px;
+            max-height: 120px;
+            padding: 10px 15px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            resize: none;
+            font-family: inherit;
+            transition: border-color 0.3s;
+        }
+        
+        #message-input:focus {
+            outline: none;
+            border-color: #4CAF50;
+        }
+        
+        .send-button {
+            padding: 10px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 20px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+            font-size: 14px;
+            font-weight: 500;
+            white-space: nowrap;
+        }
+        
+        .send-button:hover {
+            background-color: #45a049;
+        }
+        
+        .send-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- 侧边栏 - 用户列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>在线用户</h2>
+                <div class="user-count" id="user-count">0 人在线</div>
+            </div>
+            <div class="user-list" id="user-list">
+                <!-- 用户列表将通过JavaScript动态填充 -->
+            </div>
+        </div>
+        
+        <!-- 主聊天区域 -->
+        <div class="chat-main">
+            <div class="chat-header">
+                <div class="chat-title">DaiP智能聊天室</div>
+                <button id="exit-button" class="exit-button">退出</button>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                <!-- 消息将通过JavaScript动态填充 -->
+                <div class="system-message"><span>欢迎来到DaiP智能聊天室！</span></div>
+            </div>
+            
+            <div class="input-area">
+                <div class="input-container">
+                    <textarea id="message-input" placeholder="输入消息... 支持@电影和@川小农指令"></textarea>
+                    <button id="send-button" class="send-button">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取页面元素
+            const messagesContainer = document.getElementById('messages-container');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const exitButton = document.getElementById('exit-button');
+            const userList = document.getElementById('user-list');
+            const userCount = document.getElementById('user-count');
+            
+            // 从URL获取用户名和服务器地址
+            const urlParams = new URLSearchParams(window.location.search);
+            const username = urlParams.get('username');
+            const server = urlParams.get('server');
+            
+            // 连接WebSocket服务器
+            const socket = io();
+            
+            // 发送加入房间事件
+            socket.emit('join', { username: username, server: server });
+            
+            // 自动调整文本域高度
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+            });
+            
+            // 发送消息
+            function sendMessage() {
+                const message = messageInput.value.trim();
+                if (message === '') return;
+                
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                // 发送消息事件
+                socket.emit('send_message', {
+                    username: username,
+                    message: message,
+                    timestamp: timestamp
+                });
+                
+                // 清空输入框
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                
+                // 检查是否是@川小农指令，如果是，自动弹出AI自我介绍
+                if (message.startsWith('@川小农')) {
+                    setTimeout(() => {
+                        showAiIntroduction();
+                    }, 1000);
+                }
+            }
+            
+            // 发送按钮点击事件
+            sendButton.addEventListener('click', sendMessage);
+            
+            // 按Enter键发送消息（Shift+Enter换行）
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // 退出按钮点击事件
+            exitButton.addEventListener('click', function() {
+                socket.emit('leave');
+                window.location.href = '/';
+            });
+            
+            // 显示AI助手自我介绍
+            function showAiIntroduction() {
+                const aiIntro = document.createElement('div');
+                aiIntro.className = 'ai-message';
+                aiIntro.innerHTML = `
+                    <div class="ai-name">川小农</div>
+                    <div class="ai-content">
+                        你好！我是四川农业大学的AI小助手川小农。我可以回答关于四川农业大学的问题，为你创作七言古诗，还能生成学校通知格式。有什么可以帮到你的吗？
+                    </div>
+                `;
+                messagesContainer.appendChild(aiIntro);
+                scrollToBottom();
+            }
+            
+            // 滚动到底部
+            function scrollToBottom() {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            // 显示消息
+            function displayMessage(data, isSelf = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isSelf ? 'self' : ''}`;
+                
+                const messageInfo = document.createElement('div');
+                messageInfo.className = 'message-info';
+                messageInfo.innerHTML = `
+                    <span class="message-user">${data.username}</span>
+                    <span class="message-time">${data.timestamp}</span>
+                `;
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                
+                // 处理@用户高亮
+                let content = data.message;
+                if (content.includes('@')) {
+                    content = content.replace(/@(\S+)/g, '<span style="color: #4CAF50; font-weight: bold;">@$1</span>');
+                }
+                
+                messageContent.innerHTML = content;
+                
+                messageDiv.appendChild(messageInfo);
+                messageDiv.appendChild(messageContent);
+                
+                messagesContainer.appendChild(messageDiv);
+                scrollToBottom();
+            }
+            
+            // 显示AI回复
+            function displayAiResponse(data) {
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'ai-message';
+                aiMessage.innerHTML = `
+                    <div class="ai-name">${data.assistant}</div>
+                    <div class="ai-content">${data.response}</div>
+                `;
+                messagesContainer.appendChild(aiMessage);
+                scrollToBottom();
+            }
+            
+            // 显示电影播放器
+            function displayMoviePlayer(data) {
+                const movieContainer = document.createElement('div');
+                movieContainer.className = 'movie-container';
+                movieContainer.innerHTML = `
+                    <div class="movie-header">
+                        <div class="movie-title">📺 ${data.username} 播放电影: ${data.movie_name}</div>
+                        <div class="movie-controls">
+                            <button onclick="this.closest('.movie-container').remove()">✕</button>
+                        </div>
+                    </div>
+                    <iframe class="movie-player" src="${data.movie_url}" allowfullscreen></iframe>
+                `;
+                messagesContainer.appendChild(movieContainer);
+                scrollToBottom();
+            }
+            
+            // 更新用户列表
+            function updateUserList(users) {
+                userList.innerHTML = '';
+                userCount.textContent = `${users.length} 人在线`;
+                
+                users.forEach(user => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'user-item';
+                    
+                    const avatarText = user.charAt(0).toUpperCase();
+                    const isSelf = user === username;
+                    
+                    userItem.innerHTML = `
+                        <div class="user-avatar">${avatarText}</div>
+                        <div class="user-name">${user}</div>
+                        ${isSelf ? '<div class="self-indicator">我</div>' : ''}
+                    `;
+                    
+                    userList.appendChild(userItem);
+                });
+            }
+            
+            // 显示系统消息
+            function displaySystemMessage(message) {
+                const systemMessage = document.createElement('div');
+                systemMessage.className = 'system-message';
+                systemMessage.innerHTML = `<span>${message}</span>`;
+                messagesContainer.appendChild(systemMessage);
+                scrollToBottom();
+            }
+            
+            // WebSocket事件监听
+            
+            // 连接成功
+            socket.on('connect', function() {
+                console.log('已连接到服务器');
+            });
+            
+            // 连接断开
+            socket.on('disconnect', function() {
+                console.log('与服务器断开连接');
+                displaySystemMessage('与服务器断开连接，请刷新页面重试');
+            });
+            
+            // 加入成功
+            socket.on('join_success', function(data) {
+                displaySystemMessage(data.message);
+                updateUserList(data.online_users);
+            });
+            
+            // 新用户加入
+            socket.on('user_joined', function(data) {
+                displaySystemMessage(data.message);
+                updateUserList(data.online_users);
+            });
+            
+            // 用户离开
+            socket.on('user_left', function(data) {
+                displaySystemMessage(`${data.username} 离开了聊天室`);
+                updateUserList(data.online_users);
+            });
+            
+            // 新消息
+            socket.on('new_message', function(data) {
+                const isSelf = data.username === username;
+                displayMessage(data, isSelf);
+                
+                // 如果是@当前用户，显示通知
+                if (data.at_user && data.at_user === username && !isSelf) {
+                    if (Notification.permission === 'granted') {
+                        new Notification('有人@你', {
+                            body: `${data.username}: ${data.message}`,
+                            icon: '/static/images/notification-icon.png'
+                        });
+                    } else if (Notification.permission !== 'denied') {
+                        Notification.requestPermission();
+                    }
+                }
+            });
+            
+            // AI回复
+            socket.on('ai_response', function(data) {
+                displayAiResponse(data);
+            });
+            
+            // 电影播放
+            socket.on('movie_play', function(data) {
+                displayMoviePlayer(data);
+            });
+            
+            // 请求通知权限
+            if ("Notification" in window) {
+                Notification.requestPermission();
+            }
+            
+            // 页面关闭时断开连接
+            window.addEventListener('beforeunload', function() {
+                socket.emit('leave');
+            });
+        });
+    </script>
+</body>
+</html>
