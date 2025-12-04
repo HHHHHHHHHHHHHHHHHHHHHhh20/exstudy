@@ -2,9 +2,11 @@
 
 # 服务器地址列表，用户可以通过此配置文件修改服务器地址
 SERVERS = [
-    "http://localhost:5000",
-    "http://127.0.0.1:5000"
-]
+    "localhost:5000",
+    "127.0.0.1:5000",
+    "free.idcfengye.com:10307/ws"
+]   
+
 
 # 电影解析API地址
 MOVIE_API_URL = "https://jx.m3u8.tv/jiexi/?url="
