@@ -1,0 +1,2467 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaiP智能聊天室</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+    <style>
+        /* 全局CSS变量定义 - 橙黄色主题 */
+        :root {
+            --primary-color: #FF9800;
+            --primary-dark: #F57C00;
+            --secondary-color: #FFC107;
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8f9fa;
+            --bg-tertiary: #e9ecef;
+            --text-primary: #333333;
+            --text-secondary: #666666;
+            --border-color: #dee2e6;
+            --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+            --shadow-sm: 0 1px 3px 0 rgba(0, 0, 0, 0.05);
+            --transition: all 0.3s ease;
+            --gradient-primary: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+        }
+        
+        /* 基础样式重置 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Inter', 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: var(--bg-primary);
+            color: var(--text-primary);
+            height: 100vh;
+            overflow: hidden;
+        }
+        
+        /* 聊天室整体布局 - 白色主题 */
+        .chat-container {
+            display: flex;
+            height: 100vh;
+            background: var(--bg-primary);
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--border-color);
+        }
+        
+        /* 天气相关背景样式 */
+        .chat-container.weather-qing {
+            background-image: url('/static/images/qing.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .chat-container.weather-yu {
+            background-image: url('/static/images/yu.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .chat-container.weather-xue {
+            background-image: url('/static/images/xue.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .chat-container.weather-yun {
+            background-image: url('/static/images/yun.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        .chat-container.weather-yin {
+            background-image: url('/static/images/yin.jpg');
+            background-size: cover;
+            background-position: center;
+        }
+        
+        /* 天气视觉化提示样式 */
+        .chat-message.system {
+            color: #333;
+            font-weight: 500;
+            margin: 4px 0;
+        }
+        
+        .chat-message.weather {
+            color: #333;
+            font-weight: 500;
+            margin: 4px 0;
+        }
+        
+        .weather-icon {
+            pointer-events: none;
+        }
+        
+        .ai-bubble {
+            transition: all 0.3s ease;
+        }
+        
+        /* 背景装饰效果 */
+        .chat-container::before {
+            content: '';
+            position: absolute;
+            top: -50%;
+            left: -50%;
+            width: 200%;
+            height: 200%;
+            background: radial-gradient(circle at center, rgba(255, 152, 0, 0.05) 0%, transparent 70%);
+            z-index: 0;
+        }
+        
+        /* 侧边栏 - 用户列表 */
+        .sidebar {
+            width: 280px;
+            background: rgba(248, 249, 250, 0.85); /* 半透明背景 */
+            border-right: 1px solid var(--border-color);
+            display: flex;
+            flex-direction: column;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(10px); /* 添加模糊效果增强可读性 */
+        }
+        
+        .sidebar-header {
+            padding: 24px 20px;
+            text-align: center;
+            border-bottom: 1px solid var(--border-color);
+            background: var(--gradient-primary);
+        }
+        
+        .sidebar-header h2 {
+            margin: 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: -0.5px;
+        }
+        
+        .user-count {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 5px;
+        }
+        
+        .user-list {
+            flex: 1;
+            padding: 15px;
+            overflow-y: auto;
+        }
+        
+        /* 滚动条样式 */
+        .user-list::-webkit-scrollbar,
+        .messages-container::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .user-list::-webkit-scrollbar-track,
+        .messages-container::-webkit-scrollbar-track {
+            background: var(--bg-primary);
+            border-radius: 10px;
+        }
+        
+        .user-list::-webkit-scrollbar-thumb,
+        .messages-container::-webkit-scrollbar-thumb {
+            background: var(--border-color);
+            border-radius: 10px;
+            transition: var(--transition);
+        }
+        
+        .user-list::-webkit-scrollbar-thumb:hover,
+        .messages-container::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+        
+        .user-item {
+            display: flex;
+            align-items: center;
+            padding: 12px 15px;
+            margin-bottom: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
+            transition: var(--transition);
+            border: 1px solid transparent;
+        }
+        
+        .user-item:hover {
+            background: var(--bg-tertiary);
+            border-color: var(--primary-color);
+            transform: translateX(5px);
+        }
+        
+        .user-avatar {
+            width: 45px;
+            height: 45px;
+            background: var(--gradient-primary);
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            margin-right: 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .user-name {
+            flex: 1;
+            font-size: 15px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .self-indicator {
+            font-size: 12px;
+            color: var(--text-secondary);
+            font-style: italic;
+        }
+        
+        /* 主聊天区域 */
+        .chat-main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: rgba(255, 255, 255, 0.85); /* 半透明背景 */
+            position: relative;
+            z-index: 1;
+            backdrop-filter: blur(10px); /* 添加模糊效果增强可读性 */
+        }
+        
+        .chat-header {
+            padding: 20px 30px;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .chat-title {
+            font-size: 20px;
+            font-weight: 600;
+            color: var(--text-primary);
+        }
+        
+        .exit-button {
+            padding: 10px 20px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .exit-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        /* 状态按钮样式 */
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+        }
+        
+        .status-button {
+            padding: 10px 20px;
+            background: #10b981; /* 上线状态绿色 */
+            color: white;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 14px;
+            font-weight: 500;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .status-button[data-status="offline"] {
+            background: #6b7280; /* 下线状态灰色 */
+        }
+        
+        .status-button:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        /* 用户状态指示小圆点样式 */
+        .user-status {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background-color: #10b981; /* 默认绿色表示上线 */
+            margin-left: 8px;
+        }
+        
+        .user-status.offline {
+            background-color: #6b7280; /* 灰色表示下线 */
+        }
+        
+        /* 消息区域 */
+        .messages-container {
+            flex: 1;
+            padding: 30px;
+            overflow-y: auto;
+            background: rgba(255, 255, 255, 0.8); /* 半透明背景 */
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            transition: all 0.5s ease; /* 平滑过渡动画 */
+        }
+        
+        /* 输入区域 */
+        .input-area {
+            transition: all 0.5s ease; /* 平滑过渡动画 */
+        }
+        
+        /* 发送按钮 */
+        #send-button {
+            transition: all 0.5s ease; /* 平滑过渡动画 */
+        }
+        
+        /* 天气样式：晴天 */
+        .weather-sunny .messages-container {
+            background: linear-gradient(135deg, rgba(255, 245, 225, 0.85), rgba(255, 235, 205, 0.85));
+        }
+        
+        .weather-sunny .message.user .message-content {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            border: 1px solid #FF8C00;
+        }
+        
+        .weather-sunny .message.system .message-content {
+            background: rgba(255, 250, 240, 0.9);
+            border-left: 3px solid #FFA500;
+        }
+        
+        .weather-sunny .input-area {
+            background-color: rgba(255, 245, 225, 0.9);
+            border-top-color: #FFD700;
+        }
+        
+        .weather-sunny #send-button {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+        }
+        
+        /* 天气样式：雨天 */
+        .weather-rainy .messages-container {
+            background: linear-gradient(135deg, rgba(224, 247, 250, 0.85), rgba(173, 216, 230, 0.85));
+        }
+        
+        .weather-rainy .message.user .message-content {
+            background: linear-gradient(135deg, rgba(135, 206, 235, 0.9), rgba(70, 130, 180, 0.9));
+            border: 1px solid #4682B4;
+            box-shadow: 0 4px 8px rgba(135, 206, 235, 0.3);
+        }
+        
+        .weather-rainy .message.system .message-content {
+            background: rgba(224, 247, 250, 0.9);
+            border-left: 3px solid #1E90FF;
+        }
+        
+        .weather-rainy .input-area {
+            background-color: rgba(224, 247, 250, 0.9);
+            border-top-color: #1E90FF;
+        }
+        
+        .weather-rainy #send-button {
+            background: linear-gradient(135deg, #1E90FF, #4682B4);
+        }
+        
+        /* 天气样式：雪天 */
+        .weather-snowy .messages-container {
+            background: linear-gradient(135deg, rgba(240, 248, 255, 0.85), rgba(255, 255, 255, 0.85));
+        }
+        
+        .weather-snowy .message.user .message-content {
+            background: rgba(255, 255, 255, 0.95);
+            border: 1px solid #E0FFFF;
+            box-shadow: 0 4px 12px rgba(224, 255, 255, 0.4), 0 0 10px rgba(255, 255, 255, 0.3);
+        }
+        
+        .weather-snowy .message.system .message-content {
+            background: rgba(240, 248, 255, 0.9);
+            border-left: 3px solid #B0C4DE;
+        }
+        
+        .weather-snowy .input-area {
+            background-color: rgba(240, 248, 255, 0.9);
+            border-top-color: #B0C4DE;
+        }
+        
+        .weather-snowy #send-button {
+            background: linear-gradient(135deg, #F0F8FF, #B0C4DE);
+            color: #333;
+        }
+        
+        /* 天气样式：阴天 */
+        .weather-overcast .messages-container {
+            background: linear-gradient(135deg, rgba(220, 220, 220, 0.85), rgba(240, 240, 240, 0.85));
+        }
+        
+        .weather-overcast .message.user .message-content {
+            background: linear-gradient(135deg, rgba(211, 211, 211, 0.9), rgba(169, 169, 169, 0.9));
+            border: 1px solid #696969;
+        }
+        
+        .weather-overcast .message.system .message-content {
+            background: rgba(220, 220, 220, 0.9);
+            border-left: 3px solid #696969;
+        }
+        
+        .weather-overcast .input-area {
+            background-color: rgba(220, 220, 220, 0.9);
+            border-top-color: #696969;
+        }
+        
+        .weather-overcast #send-button {
+            background: linear-gradient(135deg, #A9A9A9, #696969);
+        }
+        
+        /* 天气样式：多云 */
+        .weather-cloudy .messages-container {
+            background: linear-gradient(135deg, rgba(230, 230, 250, 0.85), rgba(240, 248, 255, 0.85));
+        }
+        
+        .weather-cloudy .message.user .message-content {
+            background: linear-gradient(135deg, rgba(248, 248, 255, 0.9), rgba(224, 255, 255, 0.9));
+            border: 1px solid #E0FFFF;
+            box-shadow: 0 4px 8px rgba(224, 255, 255, 0.3);
+        }
+        
+        .weather-cloudy .message.system .message-content {
+            background: rgba(230, 230, 250, 0.9);
+            border-left: 3px solid #87CEFA;
+        }
+        
+        .weather-cloudy .input-area {
+            background-color: rgba(230, 230, 250, 0.9);
+            border-top-color: #87CEFA;
+        }
+        
+        .weather-cloudy #send-button {
+            background: linear-gradient(135deg, #87CEFA, #B0E0E6);
+        }
+        
+        /* 天气样式：雾天 */
+        .weather-foggy .messages-container {
+            background: linear-gradient(135deg, rgba(220, 220, 220, 0.7), rgba(245, 245, 245, 0.7));
+            backdrop-filter: blur(3px);
+        }
+        
+        .weather-foggy .message.user .message-content {
+            background: rgba(255, 255, 255, 0.6);
+            border: 1px solid rgba(200, 200, 200, 0.6);
+            backdrop-filter: blur(3px);
+        }
+        
+        .weather-foggy .message.system .message-content {
+            background: rgba(220, 220, 220, 0.6);
+            border-left: 3px solid rgba(169, 169, 169, 0.8);
+            backdrop-filter: blur(3px);
+        }
+        
+        .weather-foggy .input-area {
+            background-color: rgba(220, 220, 220, 0.7);
+            border-top-color: rgba(169, 169, 169, 0.8);
+            backdrop-filter: blur(3px);
+        }
+        
+        .weather-foggy #send-button {
+            background: rgba(200, 200, 200, 0.6);
+            backdrop-filter: blur(3px);
+            color: #555;
+        }
+        
+        .message {
+            margin-bottom: 20px;
+            max-width: 75%;
+            animation: fadeIn 0.3s ease-in-out;
+            display: block;
+            clear: both;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        
+        .message.self {
+            margin-left: auto;
+            margin-right: 0;
+            text-align: right;
+        }
+        
+        .message.self .message-info {
+            justify-content: flex-end;
+        }
+        
+        .message-info {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .message-user {
+            font-weight: 600;
+            font-size: 14px;
+            margin-right: 10px;
+            color: var(--text-secondary);
+        }
+        
+        .message.self .message-user {
+            color: var(--primary-color);
+        }
+        
+        .message-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+        
+        .message-content {
+            background-color: rgba(248, 249, 250, 0.9); /* 半透明背景 */
+            color: var(--text-primary);
+            padding: 15px 20px;
+            border-radius: 18px;
+            word-wrap: break-word;
+            line-height: 1.6;
+            max-width: 100%;
+            display: inline-block;
+            box-shadow: var(--shadow-sm);
+            transition: var(--transition);
+            border-left: 3px solid var(--primary-color);
+        }
+        
+        .message-content:hover {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .message.self .message-content {
+            background: var(--gradient-primary);
+            color: white;
+            border-left: none;
+            border-bottom-right-radius: 4px;
+            opacity: 0.9;
+        }
+        
+        /* AI助手消息样式 */
+        .ai-message {
+            display: flex;
+            flex-direction: column;
+            margin-bottom: 20px;
+            margin-right: auto;
+            max-width: 80%;
+            position: relative;
+        }
+        
+        .ai-message .ai-avatar {
+            width: 42px;
+            height: 42px;
+            border-radius: 50%;
+            background: var(--gradient-primary);
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            margin-bottom: 10px;
+            margin-right: 12px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .ai-message .ai-bubble {
+            background-color: rgba(248, 249, 250, 0.9); /* 半透明背景 */
+            padding: 20px;
+            border-radius: 20px;
+            border-bottom-left-radius: 6px;
+            box-shadow: var(--shadow-lg);
+            position: relative;
+            border-left: 4px solid var(--primary-color);
+        }
+        
+        .ai-message .ai-bubble::before {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: -12px;
+            width: 24px;
+            height: 24px;
+            background-color: var(--bg-secondary);
+            border-radius: 0 0 0 50%;
+            clip-path: polygon(0 0, 100% 0, 100% 100%);
+        }
+        
+        .ai-message .ai-name {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 16px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .ai-message .ai-name::before {
+            content: '🤖';
+            margin-right: 8px;
+        }
+        
+        .ai-message .ai-content {
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding-left: 28px;
+            font-size: 15px;
+        }
+        
+        .ai-message .ai-time {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 8px;
+            margin-left: 28px;
+            opacity: 0.7;
+        }
+        
+        /* 系统消息样式 */
+        .system-message {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .system-message span {
+            background-color: rgba(255, 255, 255, 0.1);
+            color: var(--text-secondary);
+            padding: 8px 20px;
+            border-radius: 25px;
+            font-size: 13px;
+            font-weight: 500;
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        /* 电影播放器样式 */
+        .movie-container {
+            background-color: var(--bg-secondary);
+            border-radius: 16px;
+            margin: 20px 0 20px auto;
+            overflow: hidden;
+            position: relative;
+            box-shadow: var(--shadow-lg);
+            max-width: 400px;
+            transition: var(--transition);
+        }
+        
+        .movie-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 15px 30px -5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .movie-header {
+            background: var(--gradient-primary);
+            color: white;
+            padding: 12px 18px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 15px;
+        }
+        
+        .movie-title {
+            font-weight: bold;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+        }
+        
+        .movie-controls button {
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            margin-left: 12px;
+            font-size: 18px;
+            transition: var(--transition);
+            padding: 4px;
+            border-radius: 50%;
+        }
+        
+        .movie-controls button:hover {
+            background-color: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+        
+        .iframe-wrapper {
+            width: 400px;
+            height: 400px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background-color: var(--bg-primary);
+        }
+        
+        .movie-player {
+            width: 400px;
+            height: 400px;
+            border: none;
+            display: block;
+            border-radius: 0 0 16px 16px;
+        }
+        
+        /* 音乐播放器样式 - 整合到用户对话框 */
+        .message-content .music-player {
+            width: 400px;
+            background-color: var(--bg-secondary);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: var(--shadow-lg);
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(5px);
+            margin-top: 10px;
+            transition: var(--transition);
+        }
+        
+        .message-content .music-player:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .message.self .message-content .music-player {
+            background-color: var(--bg-secondary);
+        }
+        
+        .music-player-content {
+            display: flex;
+            padding: 18px;
+            gap: 18px;
+        }
+        
+        .music-cover {
+            width: 85px;
+            height: 85px;
+            border-radius: 50%;
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            background: var(--gradient-primary);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        
+        .music-cover-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transition: transform 0.3s ease;
+        }
+        
+        .music-cover-img.playing {
+            animation: rotate 20s linear infinite;
+        }
+        
+        @keyframes rotate {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        
+        .music-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+        }
+        
+        .music-name {
+            font-size: 17px;
+            font-weight: 600;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .music-artist {
+            font-size: 15px;
+            color: var(--text-secondary);
+            margin-bottom: 12px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        
+        .music-player-controls {
+            display: flex;
+            gap: 18px;
+        }
+        
+        .music-control-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 19px;
+            color: var(--primary-color);
+            transition: var(--transition);
+            padding: 8px;
+            border-radius: 50%;
+        }
+        
+        .music-control-btn:hover {
+            background-color: var(--bg-tertiary);
+            transform: scale(1.1);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .music-control-btn.primary {
+            font-size: 22px;
+            background: var(--gradient-primary);
+            color: white;
+            padding: 10px;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .music-control-btn.primary:hover {
+            transform: scale(1.1);
+            box-shadow: var(--shadow-md);
+        }
+        
+        /* 输入区域 */
+        .input-area {
+            padding: 20px 30px;
+            background-color: var(--bg-secondary);
+            border-top: 1px solid var(--border-color);
+            box-shadow: 0 -2px 10px rgba(0, 0, 0, 0.1);
+        }
+        
+        .input-container {
+            display: flex;
+            align-items: flex-end;
+            gap: 12px;
+        }
+        
+        #message-input {
+            flex: 1;
+            min-width: 200px;
+            max-width: 800px;
+            min-height: 44px;
+            max-height: 120px;
+            padding: 12px 18px;
+            border: 1px solid var(--border-color);
+            border-radius: 24px;
+            font-size: 15px;
+            resize: none;
+            font-family: inherit;
+            background-color: var(--bg-tertiary);
+            color: var(--text-primary);
+            transition: var(--transition);
+        }
+        
+        #message-input:focus {
+            outline: none;
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(255, 152, 0, 0.15);
+        }
+        
+        #message-input::placeholder {
+            color: var(--text-secondary);
+            opacity: 0.7;
+        }
+        
+        .send-button {
+            padding: 12px 24px;
+            background: var(--gradient-primary);
+            color: white;
+            border: none;
+            border-radius: 24px;
+            cursor: pointer;
+            transition: var(--transition);
+            font-size: 15px;
+            font-weight: 600;
+            white-space: nowrap;
+            box-shadow: var(--shadow-sm);
+        }
+        
+        .send-button:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: var(--shadow-lg);
+        }
+        
+        .send-button:disabled {
+            background-color: var(--border-color);
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        /* 输入工具栏样式 */
+        .input-toolbar {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 12px;
+            padding-left: 5px;
+        }
+        
+        .toolbar-button {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 10px;
+            border-radius: 50%;
+            color: var(--primary-color);
+            transition: var(--transition);
+        }
+        
+        .toolbar-button:hover {
+            background-color: var(--bg-tertiary);
+            color: var(--secondary-color);
+            transform: scale(1.1);
+            box-shadow: var(--shadow-sm);
+        }
+        
+        /* 动态天气背景系统 */
+        /* 晴天背景 */
+        .weather-sunny {
+            background-image: url('/static/images/sunny.svg');
+        }
+        
+        /* 多云背景 */
+        .weather-cloudy {
+            background-image: url('/static/images/cloudy.svg');
+        }
+        
+        /* 阴天背景 */
+        .weather-overcast {
+            background-image: url('/static/images/overcast.svg');
+        }
+        
+        /* 雪天背景 */
+        .weather-snowy {
+            background-image: url('/static/images/snowy.svg');
+        }
+        
+        /* 雨天背景 - 使用多云背景作为替代 */
+        .weather-rainy {
+            background-image: url('/static/images/cloudy.svg');
+        }
+        
+        /* 雾天背景 - 使用阴天背景作为替代 */
+        .weather-foggy {
+            background-image: url('/static/images/overcast.svg');
+        }
+        
+        /* 天气消息样式 */
+        .weather-message {
+            background-color: var(--bg-secondary);
+            border: 2px solid var(--primary-color);
+            border-radius: 16px;
+            padding: 20px;
+            margin: 15px 0;
+            box-shadow: var(--shadow-lg);
+            transition: var(--transition);
+        }
+        
+        .weather-message:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
+        }
+        
+        .weather-message-header {
+            font-weight: bold;
+            color: var(--primary-color);
+            margin-bottom: 10px;
+            font-size: 18px;
+            display: flex;
+            align-items: center;
+        }
+        
+        .weather-message-header::before {
+            content: '🌤️';
+            margin-right: 10px;
+            font-size: 20px;
+        }
+        
+        .weather-message-content {
+            color: var(--text-primary);
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        
+        /* 表情面板样式 */
+    .emoji-panel {
+        position: absolute;
+        bottom: 100%;
+        left: 0;
+        background-color: #fff;
+        border: 1px solid #ddd;
+        border-radius: 8px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        width: 320px;
+        margin-bottom: 5px;
+        display: none;
+        z-index: 1000;
+        overflow: hidden;
+    }
+        
+        /* 表情网格 */
+        .emoji-grid {
+            display: grid;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 5px;
+            padding: 10px;
+            max-height: 240px;
+            overflow-y: auto;
+        }
+        
+        .emoji-item {
+            width: 35px;
+            height: 35px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 24px;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        
+        .emoji-item:hover {
+            background-color: #f0f0f0;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 768px) {
+            .sidebar {
+                display: none;
+            }
+            
+            .message {
+                max-width: 85%;
+            }
+        }
+    /* 新闻消息样式 - 深色主题 */
+        .news-message {
+            background-color: var(--bg-secondary);
+            border-radius: 8px;
+            padding: 15px;
+            margin: 10px 0;
+            box-shadow: var(--shadow-sm);
+            border: 1px solid var(--border-color);
+        }
+        
+        .news-message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border-color);
+        }
+        
+        .news-date {
+            font-size: 14px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
+        
+        .news-title {
+            font-size: 16px;
+            font-weight: bold;
+            color: var(--text-primary);
+        }
+        
+        .news-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        
+        .news-item {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid var(--border-color);
+            transition: var(--transition);
+        }
+        
+        .news-item:hover {
+            background-color: rgba(99, 102, 241, 0.1);
+            padding-left: 5px;
+            border-radius: 4px;
+        }
+        
+        .news-item:last-child {
+            border-bottom: none;
+            margin-bottom: 0;
+        }
+        
+        .news-number {
+            display: inline-block;
+            width: 24px;
+            height: 24px;
+            line-height: 24px;
+            text-align: center;
+            background-color: var(--primary-color);
+            color: white;
+            border-radius: 50%;
+            font-size: 12px;
+            font-weight: bold;
+            margin-right: 10px;
+            flex-shrink: 0;
+        }
+        
+        .news-text {
+            flex: 1;
+            font-size: 14px;
+            line-height: 1.5;
+            color: var(--text-primary);
+            word-wrap: break-word;
+        }
+        
+        .news-message-tip {
+            margin-top: 10px;
+            padding: 8px 12px;
+            background-color: var(--bg-tertiary);
+            border-radius: 4px;
+            font-size: 13px;
+            color: var(--text-secondary);
+            font-style: italic;
+            text-align: center;
+        }
+        
+        /* 新闻列表滚动条样式 */
+        .news-list::-webkit-scrollbar {
+            width: 6px;
+        }
+        
+        .news-list::-webkit-scrollbar-track {
+            background: var(--bg-tertiary);
+            border-radius: 3px;
+        }
+        
+        .news-list::-webkit-scrollbar-thumb {
+            background: var(--primary-dark);
+            border-radius: 3px;
+        }
+        
+        .news-list::-webkit-scrollbar-thumb:hover {
+            background: var(--primary-color);
+        }
+        
+        </style>
+</head>
+<body>
+    <div class="chat-container">
+        <!-- 侧边栏 - 用户列表 -->
+        <div class="sidebar">
+            <div class="sidebar-header">
+                <h2>在线用户</h2>
+                <div class="user-count" id="user-count">0 人在线</div>
+            </div>
+            <div class="user-list" id="user-list">
+                <!-- 用户列表将通过JavaScript动态填充 -->
+            </div>
+        </div>
+        
+        <!-- 主聊天区域 -->
+        <div class="chat-main">
+            <div class="chat-header">
+                <div class="chat-title">DaiP智能聊天室</div>
+                <div class="header-buttons">
+                    <button id="status-button" class="status-button" data-status="online">下线</button>
+                    <button id="exit-button" class="exit-button">退出</button>
+                </div>
+            </div>
+            
+            <div class="messages-container" id="messages-container">
+                <!-- 消息将通过JavaScript动态填充 -->
+                <div class="system-message"><span>欢迎来到DaiP智能聊天室！</span></div>
+            </div>
+            
+            <div class="input-area">
+                <!-- 快捷功能按钮栏 -->
+                <div class="input-toolbar" style="position: relative;">
+                    <button id="emoji-button" class="toolbar-button" title="选择表情">😀</button>
+                    <button id="movie-button" class="toolbar-button" title="@电影">🎬</button>
+                    <button id="sichuan-button" class="toolbar-button" title="@川小农">👨‍🌾</button>
+                    <button id="weather-button" class="toolbar-button" title="查天气">☀️</button>
+                    <button id="news-button" class="toolbar-button" title="每日新闻">📰</button>
+                    
+                    <!-- 表情选择面板 -->
+                    <div id="emoji-panel" class="emoji-panel">
+                        <div class="emoji-grid" id="emoji-grid">
+                            <!-- 表情将通过JavaScript动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <div class="input-container">
+                    <textarea id="message-input" placeholder="输入消息... 支持@电影和@川小农指令"></textarea>
+                    <button id="send-button" class="send-button">发送</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            // 获取页面元素
+            const messagesContainer = document.getElementById('messages-container');
+            const messageInput = document.getElementById('message-input');
+            const sendButton = document.getElementById('send-button');
+            const exitButton = document.getElementById('exit-button');
+            const userList = document.getElementById('user-list');
+            const userCount = document.getElementById('user-count');
+            
+            // 从模板变量获取用户名和服务器地址
+            const username = '{{ username }}';
+            const server = '{{ server }}';
+            
+            // 连接WebSocket服务器
+            const socket = io();
+            
+            // 获取状态按钮元素
+            const statusButton = document.getElementById('status-button');
+            
+            // 添加状态按钮点击事件处理
+            statusButton.addEventListener('click', function() {
+                // 获取当前状态
+                const currentStatus = this.getAttribute('data-status');
+                
+                // 切换状态
+                if (currentStatus === 'online') {
+                    // 切换到离线状态
+                    this.setAttribute('data-status', 'offline');
+                    this.textContent = '上线';
+                } else {
+                    // 切换到在线状态
+                    this.setAttribute('data-status', 'online');
+                    this.textContent = '下线';
+                }
+                
+                // 更新自己的状态指示小圆点
+                updateSelfStatusIndicator();
+            });
+            
+            // 更新自己的状态指示小圆点
+            function updateSelfStatusIndicator() {
+                const status = statusButton.getAttribute('data-status');
+                // 查找自己的用户项中的状态指示小圆点
+                const userItems = document.querySelectorAll('.user-item');
+                userItems.forEach(item => {
+                    if (item.querySelector('.self-indicator')) {
+                        const statusDot = item.querySelector('.user-status');
+                        if (statusDot) {
+                            if (status === 'offline') {
+                                statusDot.classList.add('offline');
+                            } else {
+                                statusDot.classList.remove('offline');
+                            }
+                        }
+                    }
+                });
+            }
+            
+            // 天气查询按钮点击事件
+            document.getElementById('weather-button').addEventListener('click', function() {
+                const messageInput = document.getElementById('message-input');
+                messageInput.value = '@查天气 ';
+                messageInput.focus();
+                // 将光标定位到末尾
+                const textLength = messageInput.value.length;
+                messageInput.setSelectionRange(textLength, textLength);
+            });
+            
+            // 每日新闻按钮点击事件
+            document.getElementById('news-button').addEventListener('click', function() {
+                const messageInput = document.getElementById('message-input');
+                messageInput.value = '@每日新闻';
+                messageInput.focus();
+                // 将光标定位到末尾
+                const textLength = messageInput.value.length;
+                messageInput.setSelectionRange(textLength, textLength);
+            });
+            
+            // 专门解析天气助手返回的消息
+            function parseWeatherMessage(message) {
+                try {
+                    // 按行分割
+                    const lines = message.split('\n');
+                    
+                    for (const line of lines) {
+                        // 查找天气状况行
+                        if (line.includes('天气状况') || line.includes('天气：')) {
+                            const parts = line.split(/[:：]/);
+                            if (parts.length > 1) {
+                                const weatherText = parts[1].trim();
+                                
+                                // 提取主要天气状态
+                                if (weatherText.includes('晴')) return '晴';
+                                if (weatherText.includes('雨')) return '雨';
+                                if (weatherText.includes('雪')) return '雪';
+                                if (weatherText.includes('阴')) return '阴';
+                                if (weatherText.includes('多云')) return '多云';
+                                if (weatherText.includes('雾')) return '雾';
+                                
+                                return weatherText; // 返回原始文本
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error('解析天气消息失败:', e);
+                }
+                
+                return null;
+            }
+
+            // 从天气消息中提取状态
+            function extractWeatherFromMessage(messageText) {
+                // 首先尝试使用现有的parseWeatherMessage函数
+                const weatherStatus = parseWeatherMessage(messageText);
+                if (weatherStatus) {
+                    return weatherStatus;
+                }
+                
+                try {
+                    // 直接从消息文本中提取天气关键词
+                    const weatherKeywords = ['晴', '雨', '雪', '阴', '多云', '雾'];
+                    
+                    for (const keyword of weatherKeywords) {
+                        if (messageText.includes(keyword)) {
+                            return keyword;
+                        }
+                    }
+                    
+                    // 尝试解析JSON格式的天气数据
+                    const jsonMatch = messageText.match(/\{.*\}/);
+                    if (jsonMatch) {
+                        try {
+                            const weatherData = JSON.parse(jsonMatch[0]);
+                            if (weatherData.status) {
+                                return weatherData.status;
+                            }
+                        } catch (e) {
+                            console.log('无法解析JSON格式的天气数据');
+                        }
+                    }
+                } catch (e) {
+                    console.error('提取天气状态失败:', e);
+                }
+                
+                return null;
+            }
+            
+            // 天气视觉化提示函数
+            function applyWeatherVisualCue(weatherText, messageEl) {
+                const text = (weatherText || "").toLowerCase();
+                let type = "default";
+                let color = "#f0f0f0"; // 默认浅灰
+                let icon = "";
+                
+                if (/晴|sun/.test(text)) {
+                    type = "sunny";
+                    color = "linear-gradient(135deg, #ffe680, #fff2cc)";
+                    icon = "☀️";
+                } else if (/雨|阵雨|drizzle|rain/.test(text)) {
+                    type = "rainy";
+                    color = "linear-gradient(135deg, #a0c4ff, #70a1ff)";
+                    icon = "🌧️";
+                } else if (/雪|snow/.test(text)) {
+                    type = "snow";
+                    color = "linear-gradient(135deg, #ffffff, #d6f0ff)";
+                    icon = "❄️";
+                } else if (/雷|storm|雷阵雨/.test(text)) {
+                    type = "storm";
+                    color = "linear-gradient(135deg, #ff9999, #ff4d4d)";
+                    icon = "🌩️";
+                } else if (/雾|霾|fog|haze/.test(text)) {
+                    type = "fog";
+                    color = "linear-gradient(135deg, #cccccc, #e0e0e0)";
+                    icon = "🌫️";
+                } else if (/阴|多云|cloud|cloudy/.test(text)) {
+                    type = "cloudy";
+                    color = "linear-gradient(135deg, #d9d9d9, #f2f2f2)";
+                    icon = "☁️";
+                }
+                
+                if (!messageEl) {
+                    console.warn("[weather-visual] 未传入消息元素");
+                    return;
+                }
+                
+                // 设置背景渐变
+                messageEl.style.background = color;
+                messageEl.style.border = "1px solid #888";
+                messageEl.style.borderRadius = "12px";
+                messageEl.style.padding = "8px";
+                messageEl.style.position = "relative";
+                
+                // 添加天气图标
+                if (!messageEl.querySelector(".weather-icon")) {
+                    const span = document.createElement("span");
+                    span.className = "weather-icon";
+                    span.style.position = "absolute";
+                    span.style.top = "4px";
+                    span.style.right = "6px";
+                    span.style.fontSize = "18px";
+                    span.textContent = icon;
+                    messageEl.appendChild(span);
+                }
+                
+                // 动画效果
+                messageEl.style.transition = "transform 0.3s";
+                messageEl.style.transform = "scale(1.05)";
+                
+                setTimeout(() => {
+                    messageEl.style.transform = "scale(1)";
+                }, 300);
+                
+                console.info("[weather-visual] 类型:", type, "应用到元素:", messageEl);
+            }
+            
+            // 切换聊天框天气样式
+            function changeChatboxStyle(weatherStatus) {
+                console.log('=== changeChatboxStyle函数调用 ===');
+                console.log('天气状态参数:', weatherStatus);
+                
+                if (!weatherStatus) {
+                    console.log('天气状态为空，返回');
+                    return;
+                }
+                
+                // 获取需要修改样式的元素
+                const messagesContainer = document.querySelector('.messages-container');
+                const inputArea = document.querySelector('.input-area');
+                const sendButton = document.getElementById('send-button');
+                
+                console.log('找到的元素:');
+                console.log('  .messages-container:', messagesContainer);
+                console.log('  .input-area:', inputArea);
+                console.log('  #send-button:', sendButton);
+                
+                if (!messagesContainer || !inputArea || !sendButton) {
+                    console.error('无法找到聊天框元素');
+                    return;
+                }
+                
+                // 天气状态到CSS类的映射
+                const weatherClassMap = {
+                    '晴': 'weather-sunny',
+                    '雨': 'weather-rainy',
+                    '雪': 'weather-snowy',
+                    '阴': 'weather-overcast',
+                    '多云': 'weather-cloudy',
+                    '雾': 'weather-foggy'
+                };
+                
+                console.log('天气类映射:', weatherClassMap);
+                
+                // 所有天气相关的CSS类
+                const allWeatherClasses = Object.values(weatherClassMap);
+                console.log('所有天气类:', allWeatherClasses);
+                
+                // 从所有相关元素中移除所有天气类
+                console.log('移除旧天气类...');
+                [messagesContainer, inputArea].forEach(element => {
+                    allWeatherClasses.forEach(cls => {
+                        const hadClass = element.classList.contains(cls);
+                        if (hadClass) {
+                            element.classList.remove(cls);
+                            console.log(`  从${element.className}移除${cls}`);
+                        }
+                    });
+                });
+                
+                // 添加当前天气对应的类
+                const weatherClass = weatherClassMap[weatherStatus];
+                console.log('当前天气对应的CSS类:', weatherClass);
+                
+                if (weatherClass) {
+                    console.log('添加新天气类...');
+                    messagesContainer.classList.add(weatherClass);
+                    console.log(`  为消息容器添加${weatherClass}: ${messagesContainer.className}`);
+                    
+                    inputArea.classList.add(weatherClass);
+                    console.log(`  为输入区域添加${weatherClass}: ${inputArea.className}`);
+                    
+                    // 为发送按钮添加天气类
+                    console.log('  为发送按钮处理类...');
+                    allWeatherClasses.forEach(cls => {
+                        const hadClass = sendButton.classList.contains(cls);
+                        if (hadClass) {
+                            sendButton.classList.remove(cls);
+                            console.log(`    从发送按钮移除${cls}`);
+                        }
+                    });
+                    sendButton.classList.add(weatherClass);
+                    console.log(`    为发送按钮添加${weatherClass}: ${sendButton.className}`);
+                } else {
+                    console.log('未找到对应的天气CSS类');
+                }
+                
+                console.log('=== changeChatboxStyle函数结束 ===');
+            }
+            
+            // 切换天气背景 - 优化版本
+            function changeWeatherBackground(weatherStatus) {
+                const chatContainer = document.querySelector('.chat-container');
+                
+                // 移除所有天气相关的类
+                chatContainer.classList.remove('weather-qing', 'weather-yu', 'weather-xue', 'weather-yun', 'weather-yin');
+                
+                // 添加过渡动画类
+                chatContainer.style.opacity = '0.95'; // 稍微降低不透明度以增强过渡效果
+                
+                // 延迟添加新背景类，确保过渡动画生效
+                setTimeout(() => {
+                    // 根据天气状态添加对应的类
+                    switch(weatherStatus) {
+                        case '晴':
+                            chatContainer.classList.add('weather-qing');
+                            break;
+                        case '雨':
+                            chatContainer.classList.add('weather-yu');
+                            break;
+                        case '雪':
+                            chatContainer.classList.add('weather-xue');
+                            break;
+                        case '阴':
+                            chatContainer.classList.add('weather-yin');
+                            break;
+                        case '多云':
+                            chatContainer.classList.add('weather-yun');
+                            break;
+                        case '雾':
+                            chatContainer.classList.add('weather-yun'); // 雾天使用多云背景
+                            break;
+                        default:
+                            // 默认不添加任何天气类，保持原始背景
+                            break;
+                    }
+                    
+                    // 恢复完全不透明度
+                    chatContainer.style.opacity = '1';
+                }, 50); // 短暂延迟以触发过渡
+            }
+            
+            // 发送加入房间事件
+            socket.emit('join', { username: username, server: server });
+            
+            // 自动调整文本域高度
+            messageInput.addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight < 120 ? this.scrollHeight : 120) + 'px';
+            });
+            
+            // 发送消息
+            function sendMessage() {
+                const message = messageInput.value.trim();
+                if (message === '') return;
+                
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                // 发送消息事件
+                socket.emit('send_message', {
+                    username: username,
+                    message: message,
+                    timestamp: timestamp
+                });
+                
+                // 清空输入框
+                messageInput.value = '';
+                messageInput.style.height = 'auto';
+                
+                // 检查是否是@川小农指令，如果是，自动弹出AI自我介绍
+                if (message.startsWith('@川小农')) {
+                    // 标记首次AI交互
+                    if (!sessionStorage.getItem('ai_introduced')) {
+                        setTimeout(() => {
+                            showAiIntroduction();
+                            sessionStorage.setItem('ai_introduced', 'true');
+                        }, 1000);
+                    }
+                }
+            }
+            
+            // 发送按钮点击事件
+            sendButton.addEventListener('click', sendMessage);
+            
+            // 按Enter键发送消息（Shift+Enter换行）
+            messageInput.addEventListener('keydown', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    sendMessage();
+                }
+            });
+            
+            // 表情包功能 - 简化版本
+            const emojiButton = document.getElementById('emoji-button');
+            const emojiPanel = document.getElementById('emoji-panel');
+            const emojiGrid = document.getElementById('emoji-grid');
+            
+            // 常用表情列表
+            const commonEmojis = [
+                '😀', '😃', '😄', '😁', '😆', '😅', '😂', '🤣',
+                '😊', '😇', '🙂', '🙃', '😉', '😌', '😍', '🥰',
+                '😘', '😗', '😙', '😚', '😋', '😛', '😝', '😜',
+                '🤪', '🤨', '🧐', '🤓', '😎', '🤩', '🥳', '😏',
+                '😒', '😞', '😔', '😟', '😕', '🙁', '☹️', '😣',
+                '😖', '😫', '😩', '🥺', '😢', '😭', '😤', '😠',
+                '👍', '👎', '👌', '✌️', '🤞', '🤟', '🤘', '🤙',
+                '❤️', '🧡', '💛', '💚', '💙', '💜', '🖤', '💔',
+                '🎉', '🎊', '🎁', '🎈', '🔥', '✨', '⭐', '🌟',
+                '💯', '🙏', '👏', '🙌', '👐', '🤲', '🤝', '💪'
+            ];
+            
+            // 渲染表情网格
+            function renderEmojiGrid() {
+                emojiGrid.innerHTML = '';
+                
+                commonEmojis.forEach(emoji => {
+                    const emojiItem = document.createElement('div');
+                    emojiItem.className = 'emoji-item';
+                    emojiItem.textContent = emoji;
+                    
+                    // 添加点击事件
+                    emojiItem.addEventListener('click', function() {
+                        // 直接操作文本域添加表情
+                        const textarea = document.getElementById('message-input');
+                        const startPos = textarea.selectionStart;
+                        const endPos = textarea.selectionEnd;
+                        const textBefore = textarea.value.substring(0, startPos);
+                        const textAfter = textarea.value.substring(endPos);
+                        
+                        textarea.value = textBefore + emoji + textAfter;
+                        
+                        // 设置光标位置
+                        const newPos = startPos + emoji.length;
+                        textarea.setSelectionRange(newPos, newPos);
+                        
+                        // 自动调整高度
+                        textarea.style.height = 'auto';
+                        textarea.style.height = (textarea.scrollHeight < 120 ? textarea.scrollHeight : 120) + 'px';
+                        
+                        // 保持焦点
+                        textarea.focus();
+                        
+                        // 关闭面板
+                        emojiPanel.style.display = 'none';
+                    });
+                    
+                    emojiGrid.appendChild(emojiItem);
+                });
+            }
+            
+            // 渲染表情
+            renderEmojiGrid();
+            
+            // 确保工具栏有相对定位
+            emojiButton.parentNode.style.position = 'relative';
+            
+            // 切换表情面板显示/隐藏
+            function toggleEmojiPanel() {
+                const emojiPanel = document.getElementById('emoji-panel');
+                if (emojiPanel.style.display === 'block') {
+                    emojiPanel.style.opacity = '0';
+                    emojiPanel.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        emojiPanel.style.display = 'none';
+                    }, 200);
+                } else {
+                    emojiPanel.style.display = 'block';
+                    emojiPanel.style.opacity = '0';
+                    emojiPanel.style.transform = 'translateY(-10px)';
+                    setTimeout(() => {
+                        emojiPanel.style.opacity = '1';
+                        emojiPanel.style.transform = 'translateY(0)';
+                    }, 10);
+                }
+            }
+            
+            // 点击表情按钮切换面板显示
+            emojiButton.onclick = function(e) {
+                e.stopPropagation(); // 阻止冒泡
+                toggleEmojiPanel();
+            };
+            
+            // 点击页面其他地方关闭面板
+            document.addEventListener('click', function() {
+                if (emojiPanel.style.display === 'block') {
+                    toggleEmojiPanel();
+                }
+            });
+            
+            // 添加表情面板的CSS过渡效果
+            emojiPanel.style.transition = 'opacity 0.2s ease, transform 0.2s ease';
+            
+            // 阻止面板内部点击事件冒泡
+            emojiPanel.addEventListener('click', function(e) {
+                e.stopPropagation();
+            });
+            
+            // 快捷功能按钮
+            document.getElementById('movie-button').addEventListener('click', function() {
+                insertAtCursor(messageInput, '@电影 ');
+                messageInput.focus();
+            });
+            
+            document.getElementById('sichuan-button').addEventListener('click', function() {
+                insertAtCursor(messageInput, '@川小农 ');
+                messageInput.focus();
+                
+                // 标记首次AI交互
+                if (!sessionStorage.getItem('ai_introduced')) {
+                    setTimeout(() => {
+                        showAiIntroduction();
+                        sessionStorage.setItem('ai_introduced', 'true');
+                    }, 1000);
+                }
+            });
+            
+            // 音乐快捷按钮
+            const musicButton = document.createElement('button');
+            musicButton.id = 'music-button';
+            musicButton.className = 'toolbar-button';
+            musicButton.textContent = '🎵';
+            musicButton.title = '听音乐';
+            
+            // 找到天气按钮并在其后插入音乐按钮
+            const weatherButton = document.getElementById('weather-button');
+            if (weatherButton && weatherButton.parentNode) {
+                weatherButton.parentNode.insertBefore(musicButton, weatherButton.nextSibling);
+            }
+            
+            // 音乐按钮点击事件
+            musicButton.addEventListener('click', function() {
+                insertAtCursor(messageInput, '@听音乐 ');
+                messageInput.focus();
+            });
+            
+            // 在光标位置插入文本的函数
+            function insertAtCursor(textarea, text) {
+                // 保存当前滚动位置
+                const scrollTop = textarea.scrollTop;
+                
+                // 使用现代浏览器API插入文本
+                if (textarea.setRangeText) {
+                    textarea.setRangeText(text);
+                    
+                    // 设置光标位置到插入文本的末尾
+                    const newPosition = textarea.selectionStart + text.length;
+                    textarea.setSelectionRange(newPosition, newPosition);
+                } else {
+                    // 兼容旧浏览器
+                    const startPos = textarea.selectionStart;
+                    const endPos = textarea.selectionEnd;
+                    
+                    textarea.value = textarea.value.substring(0, startPos) + text + textarea.value.substring(endPos);
+                    
+                    // 设置光标位置
+                    const newPosition = startPos + text.length;
+                    textarea.selectionStart = textarea.selectionEnd = newPosition;
+                }
+                
+                // 恢复滚动位置
+                textarea.scrollTop = scrollTop;
+                
+                // 自动调整高度
+                textarea.style.height = 'auto';
+                textarea.style.height = (textarea.scrollHeight < 120 ? textarea.scrollHeight : 120) + 'px';
+                
+                // 确保输入框保持焦点
+                textarea.focus();
+            }
+            
+            // 退出按钮点击事件
+            exitButton.addEventListener('click', function() {
+                socket.emit('leave');
+                window.location.href = '/';
+            });
+            
+            // 显示AI助手自我介绍
+            function showAiIntroduction() {
+                const aiIntro = document.createElement('div');
+                aiIntro.className = 'ai-message';
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                aiIntro.innerHTML = `
+                    <div class="ai-bubble">
+                        <div class="ai-name">川小农</div>
+                        <div class="ai-content">
+                            你好！我是四川农业大学的AI小助手川小农。我可以回答关于四川农业大学的问题，为你创作七言古诗，还能生成学校通知格式。有什么可以帮到你的吗？
+                        </div>
+                        <div class="ai-time">${timestamp}</div>
+                    </div>
+                `;
+                messagesContainer.appendChild(aiIntro);
+                scrollToBottom();
+            }
+            
+            // 滚动到底部
+            function scrollToBottom() {
+                messagesContainer.scrollTop = messagesContainer.scrollHeight;
+            }
+            
+            // 显示消息
+            function displayMessage(data, isSelf = false) {
+                const messageDiv = document.createElement('div');
+                messageDiv.className = `message ${isSelf ? 'self' : ''}`;
+                
+                const messageInfo = document.createElement('div');
+                messageInfo.className = 'message-info';
+                messageInfo.innerHTML = `
+                    <span class="message-user">${data.username}</span>
+                    <span class="message-time">${data.timestamp}</span>
+                `;
+                
+                const messageContent = document.createElement('div');
+                messageContent.className = 'message-content';
+                
+                // 处理@用户高亮
+                let content = data.message;
+                if (content.includes('@')) {
+                    content = content.replace(/@(\S+)/g, '<span style="color: #4CAF50; font-weight: bold;">@$1</span>');
+                }
+                
+                // 为@听音乐消息添加唯一标识，方便后续匹配音乐响应
+                if (content === '@听音乐' || content.includes('@听音乐 ')) {
+                    musicRequestCounter++;
+                    messageContent.dataset.musicRequest = 'true';
+                    messageContent.dataset.requestId = musicRequestCounter;
+                    
+                    // 存储请求信息
+                    recentMusicRequests.push({
+                        id: musicRequestCounter,
+                        username: data.username,
+                        timestamp: new Date().getTime()
+                    });
+                    
+                    // 限制存储的请求数量
+                    if (recentMusicRequests.length > 10) {
+                        recentMusicRequests.shift();
+                    }
+                }
+                
+                messageContent.innerHTML = content;
+                
+                messageDiv.appendChild(messageInfo);
+                messageDiv.appendChild(messageContent);
+                
+                messagesContainer.appendChild(messageDiv);
+                scrollToBottom();
+            }
+            
+            // 显示AI回复
+            function displayAiResponse(data) {
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'ai-message';
+                
+                // 处理回复内容，移除可能的前缀
+                let responseContent = data.response;
+                if (responseContent.startsWith('川小农：')) {
+                    responseContent = responseContent.substring(4);
+                }
+                
+                aiMessage.innerHTML = `
+                    <div class="ai-bubble">
+                        <div class="ai-name">${data.assistant}</div>
+                        <div class="ai-content">${responseContent}</div>
+                        <div class="ai-time">${data.timestamp}</div>
+                    </div>
+                `;
+                
+                messagesContainer.appendChild(aiMessage);
+                scrollToBottom();
+                
+                // 解析天气消息并切换背景和聊天框样式
+                console.log('=== 天气样式处理开始 ===');
+                console.log('AI回复内容:', responseContent);
+                const weatherStatus = parseWeatherMessage(responseContent);
+                console.log('解析到的天气状态:', weatherStatus);
+                
+                if (weatherStatus) {
+                    console.log('调用changeWeatherBackground:', weatherStatus);
+                    changeWeatherBackground(weatherStatus);
+                    
+                    console.log('调用changeChatboxStyle:', weatherStatus);
+                    changeChatboxStyle(weatherStatus);
+                    
+                    // 应用天气视觉化提示
+                    const aiBubble = aiMessage.querySelector('.ai-bubble');
+                    if (aiBubble) {
+                        console.log('调用applyWeatherVisualCue:', weatherStatus);
+                        applyWeatherVisualCue(weatherStatus, aiBubble);
+                    }
+                    
+                    // 验证样式是否应用
+                    const messagesContainer = document.querySelector('.messages-container');
+                    const inputArea = document.querySelector('.input-area');
+                    const sendButton = document.getElementById('send-button');
+                    
+                    console.log('消息容器类:', messagesContainer ? messagesContainer.className : '未找到');
+                    console.log('输入区域类:', inputArea ? inputArea.className : '未找到');
+                    console.log('发送按钮类:', sendButton ? sendButton.className : '未找到');
+                } else {
+                    console.log('未解析到有效天气状态');
+                }
+                console.log('=== 天气样式处理结束 ===');
+            }
+            
+            // 显示电影播放器
+            function displayMoviePlayer(data) {
+                const movieContainer = document.createElement('div');
+                movieContainer.className = 'movie-container';
+                
+                // 使用iframe播放，并确保尺寸固定为400x400px
+                movieContainer.innerHTML = `
+                    <div class="movie-header">
+                        <div class="movie-title">📺 ${data.username} 分享视频</div>
+                        <div class="movie-controls">
+                            <button onclick="this.closest('.movie-container').remove()">✕</button>
+                        </div>
+                    </div>
+                    <div class="iframe-wrapper">
+                        <iframe class="movie-player" src="${data.movie_url}" allowfullscreen></iframe>
+                    </div>
+                `;
+                
+                messagesContainer.appendChild(movieContainer);
+                scrollToBottom();
+            }
+            
+            // 在消息内容中插入音乐播放器
+            function insertMusicPlayer(messageElement, musicData) {
+                console.log('开始插入音乐播放器，音乐数据：', musicData);
+                
+                // 清理所有现有的音乐播放器和音频元素，确保每次只有一个播放器存在
+                const allMusicPlayers = document.querySelectorAll('.music-player');
+                console.log('找到现有的音乐播放器数量：', allMusicPlayers.length);
+                allMusicPlayers.forEach(player => {
+                    player.remove();
+                });
+                
+                const allAudioElements = document.querySelectorAll('audio[data-music-id]');
+                console.log('找到现有的音频元素数量：', allAudioElements.length);
+                allAudioElements.forEach(audio => {
+                    audio.pause();
+                    audio.src = '';
+                    audio.remove();
+                });
+                
+                const musicId = 'music-' + Date.now();
+                const musicPlayer = document.createElement('div');
+                musicPlayer.className = 'music-player';
+                musicPlayer.dataset.musicId = musicId;
+                
+                musicPlayer.innerHTML = `
+                    <div class="music-player-content">
+                        <div class="music-cover">
+                            <img class="music-cover-img" src="${musicData.cover || '/static/images/default-music-cover.svg'}" alt="${musicData.title}">
+                        </div>
+                        <div class="music-info">
+                            <div>
+                                <div class="music-name">🎵 ${musicData.title}</div>
+                                <div class="music-artist">${musicData.artist}</div>
+                                <div class="music-status" id="status-${musicId}">加载中...</div>
+                            </div>
+                            <div class="music-player-controls">
+                                <button class="music-control-btn" id="prev-btn-${musicId}">⏮️</button>
+                                <button class="music-control-btn primary" id="play-pause-btn-${musicId}">▶️</button>
+                                <button class="music-control-btn" id="next-btn-${musicId}">⏭️</button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+                
+                // 添加到消息内容中
+                const messageContent = messageElement.querySelector('.message-content');
+                messageContent.appendChild(musicPlayer);
+                
+                // 创建音频元素并存储引用
+                const audio = new Audio();
+                audio.dataset.musicId = musicId;
+                audio.dataset.timestamp = Date.now();
+                console.log('创建了新的音频元素：', audio);
+                
+                // 将音频元素添加到文档中
+                document.body.appendChild(audio);
+                
+                // 清理之前可能存在的未正确移除的音频元素
+                cleanupUnusedAudioElements();
+                
+                const coverImg = musicPlayer.querySelector('.music-cover-img');
+                const playPauseBtn = document.getElementById(`play-pause-btn-${musicId}`);
+                const statusDisplay = document.getElementById(`status-${musicId}`);
+                
+                // 加载状态处理
+                audio.addEventListener('loadstart', function() {
+                    statusDisplay.textContent = '加载中...';
+                });
+                
+                audio.addEventListener('loadeddata', function() {
+                    statusDisplay.textContent = '';
+                    playPauseBtn.disabled = false;
+                });
+                
+                // 错误处理 - 增强版本
+                audio.addEventListener('error', function() {
+                    console.error('音乐加载失败:', audio.error);
+                    statusDisplay.textContent = '加载失败，请稍后重试';
+                    alert('音乐加载失败，可能是网络问题或链接失效，请稍后重试');
+                });
+                
+                // 设置音频源 - 直接使用后端返回的备用音乐URL
+                if (musicData.play_url) {
+                    console.log('设置音频源：', musicData.play_url);
+                    audio.src = musicData.play_url;
+                    
+                    // 预加载音频 - 在设置src后再调用load()
+                    console.log('开始预加载音频');
+                    audio.load();
+                    console.log('音频元素已在DOM中，检查：', document.querySelector(`audio[data-music-id="${musicId}"]`));
+                } else {
+                    console.error('没有有效的音乐URL');
+                    statusDisplay.textContent = '无法播放，请稍后重试';
+                }
+                
+                // 播放/暂停控制
+                playPauseBtn.addEventListener('click', function() {
+                    if (audio.paused) {
+                        audio.play().catch(error => {
+                            console.error('音乐播放失败:', error);
+                            alert('音乐播放失败，请检查网络或浏览器设置');
+                        });
+                        playPauseBtn.textContent = '⏸️';
+                        coverImg.classList.add('playing');
+                    } else {
+                        audio.pause();
+                        playPauseBtn.textContent = '▶️';
+                        coverImg.classList.remove('playing');
+                    }
+                });
+                
+                // 上一首控制
+                document.getElementById(`prev-btn-${musicId}`).addEventListener('click', function() {
+                    stopAndCleanupAudio(audio, musicPlayer);
+                    
+                    // 发送请求获取上一首
+                    socket.emit('send_message', {
+                        username: username,
+                        message: '@听音乐',
+                        timestamp: new Date().toLocaleTimeString('zh-CN', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        })
+                    });
+                });
+                
+                // 下一首控制
+                document.getElementById(`next-btn-${musicId}`).addEventListener('click', function() {
+                    stopAndCleanupAudio(audio, musicPlayer);
+                    
+                    // 发送请求获取下一首
+                    socket.emit('send_message', {
+                        username: username,
+                        message: '@听音乐',
+                        timestamp: new Date().toLocaleTimeString('zh-CN', { 
+                            hour: '2-digit', 
+                            minute: '2-digit' 
+                        })
+                    });
+                });
+                
+                // 播放结束事件
+                audio.addEventListener('ended', function() {
+                    playPauseBtn.textContent = '▶️';
+                    coverImg.classList.remove('playing');
+                });
+            }
+            
+            // 停止并清理音频元素
+            function stopAndCleanupAudio(audio, musicPlayer) {
+                if (audio) {
+                    audio.pause();
+                    audio.src = '';
+                    audio.removeAttribute('src');
+                    audio.load();
+                    
+                    // 从DOM中移除
+                    if (audio.parentNode === document.body) {
+                        document.body.removeChild(audio);
+                    }
+                }
+                
+                if (musicPlayer && musicPlayer.parentNode) {
+                    musicPlayer.parentNode.removeChild(musicPlayer);
+                }
+            }
+            
+            // 清理未使用的音频元素
+            function cleanupUnusedAudioElements() {
+                const audioElements = document.querySelectorAll('audio[data-music-id]');
+                const activePlayers = document.querySelectorAll('.music-player');
+                const activePlayerIds = Array.from(activePlayers).map(player => player.dataset.musicId);
+                
+                audioElements.forEach(audio => {
+                    const audioId = audio.dataset.musicId;
+                    // 移除那些没有对应播放器的音频元素
+                    if (!activePlayerIds.includes(audioId)) {
+                        console.log('清理孤立的音频元素:', audioId);
+                        audio.pause();
+                        if (audio.parentNode === document.body) {
+                            document.body.removeChild(audio);
+                        }
+                    }
+                });
+            }
+            
+            // 更新用户列表
+            function updateUserList(users) {
+                userList.innerHTML = '';
+                userCount.textContent = `${users.length} 人在线`;
+                
+                users.forEach(user => {
+                    const userItem = document.createElement('div');
+                    userItem.className = 'user-item';
+                    
+                    const avatarText = user.charAt(0).toUpperCase();
+                    const isSelf = user === username;
+                    
+                    // 对于自己，根据当前状态决定小圆点颜色
+                    const statusClass = isSelf ? 
+                        (statusButton && statusButton.getAttribute('data-status') === 'offline' ? 'user-status offline' : 'user-status') : 
+                        'user-status';
+                    
+                    userItem.innerHTML = `
+                        <div class="user-avatar">${avatarText}</div>
+                        <div class="user-name">
+                            ${user}
+                            <div class="${statusClass}"></div>
+                        </div>
+                        ${isSelf ? '<div class="self-indicator">我</div>' : ''}
+                    `;
+                    
+                    userList.appendChild(userItem);
+                });
+            }
+            
+            // 显示系统消息
+            function displaySystemMessage(message) {
+                const systemMessage = document.createElement('div');
+                systemMessage.className = 'system-message';
+                systemMessage.innerHTML = `<span>${message}</span>`;
+                messagesContainer.appendChild(systemMessage);
+                scrollToBottom();
+            }
+            
+            // WebSocket事件监听
+            
+            // 连接成功
+            socket.on('connect', function() {
+                console.log('已连接到服务器');
+            });
+            
+            // 连接断开
+            socket.on('disconnect', function() {
+                console.log('与服务器断开连接');
+                displaySystemMessage('与服务器断开连接，请刷新页面重试');
+            });
+            
+            // 加入成功
+            socket.on('join_success', function(data) {
+                displaySystemMessage(data.message);
+                updateUserList(data.online_users);
+            });
+            
+            // 新用户加入
+            socket.on('user_joined', function(data) {
+                displaySystemMessage(data.message);
+                updateUserList(data.online_users);
+            });
+            
+            // 用户离开
+            socket.on('user_left', function(data) {
+                displaySystemMessage(`${data.username} 离开了聊天室`);
+                updateUserList(data.online_users);
+            });
+            
+            // 新消息
+            socket.on('new_message', function(data) {
+                const isSelf = data.username === username;
+                displayMessage(data, isSelf);
+                
+                // 如果消息包含@川小农，并且不是AI回复和自己发送的，标记为AI触发消息
+                if (data.message && data.message.includes('@川小农') && !isSelf) {
+                    // 标记首次AI交互
+                    if (!sessionStorage.getItem('ai_introduced')) {
+                        setTimeout(() => {
+                            showAiIntroduction();
+                            sessionStorage.setItem('ai_introduced', 'true');
+                        }, 1000);
+                    }
+                }
+                
+                // 如果是@当前用户，显示通知
+                if (data.at_user && data.at_user === username && !isSelf) {
+                    if (Notification.permission === 'granted') {
+                        new Notification('有人@你', {
+                            body: `${data.username}: ${data.message}`,
+                            icon: '/static/images/notification-icon.png'
+                        });
+                    } else if (Notification.permission !== 'denied') {
+                        Notification.requestPermission();
+                    }
+                }
+            });
+            
+            // AI回复
+            socket.on('ai_response', function(data) {
+                displayAiResponse(data);
+            });
+            
+            // 监听天气查询回复
+            socket.on('weather_response', function(data) {
+                // 添加天气消息到聊天界面
+                const weatherMessage = `
+                    <div class="weather-message">
+                        <div class="weather-message-header">${data.city} 天气情况</div>
+                        <div class="weather-message-content">${data.response.replace(/\n/g, '<br>')}</div>
+                    </div>
+                `;
+                
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'ai-message';
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                aiMessage.innerHTML = `
+                    <div class="ai-bubble">
+                        <div class="ai-name">天气助手</div>
+                        <div class="ai-content">${weatherMessage}</div>
+                        <div class="ai-time">${timestamp}</div>
+                    </div>
+                `;
+                
+                messagesContainer.appendChild(aiMessage);
+                scrollToBottom();
+                
+                // 检查天气响应内容中的天气关键词
+                let weatherStatus = null;
+                if (data.response.includes('晴')) {
+                    weatherStatus = '晴';
+                } else if (data.response.includes('雨')) {
+                    weatherStatus = '雨';
+                } else if (data.response.includes('雪')) {
+                    weatherStatus = '雪';
+                } else if (data.response.includes('多云')) {
+                    weatherStatus = '多云';
+                } else if (data.response.includes('阴')) {
+                    weatherStatus = '阴';
+                }
+                
+                if (weatherStatus) {
+                    // 如果检测到天气关键词，切换对应的背景
+                    changeWeatherBackground(weatherStatus);
+                    
+                    // 应用天气视觉化提示
+                    const weatherBubble = aiMessage.querySelector('.ai-bubble');
+                    if (weatherBubble) {
+                        applyWeatherVisualCue(weatherStatus, weatherBubble);
+                    }
+                } else {
+                    // 如果没有检测到天气关键词，保持默认背景（移除所有天气背景类）
+                    const chatContainer = document.querySelector('.chat-container');
+                    chatContainer.classList.remove('weather-qing', 'weather-yu', 'weather-xue', 'weather-yun', 'weather-yin');
+                }
+            });
+            
+            // 监听背景更换事件
+            socket.on('change_background', function(data) {
+                // 根据背景类型设置对应的天气状态
+                let weatherStatus = null;
+                switch(data.background_type) {
+                    case 'sunny':
+                        weatherStatus = '晴';
+                        break;
+                    case 'rainy':
+                        weatherStatus = '雨';
+                        break;
+                    case 'snowy':
+                        weatherStatus = '雪';
+                        break;
+                    case 'cloudy':
+                        weatherStatus = '多云';
+                        break;
+                    case 'overcast':
+                        weatherStatus = '阴';
+                        break;
+                }
+                
+                if (weatherStatus) {
+                    // 调用天气背景切换函数
+                    changeWeatherBackground(weatherStatus);
+                }
+            });
+            
+            // 根据天气状态获取对应的表情图标
+            function getWeatherIcon(status) {
+                const icons = {
+                    '晴': '☀️',
+                    '雨': '🌧️',
+                    '雪': '❄️',
+                    '阴': '☁️',
+                    '雾': '🌫️'
+                };
+                return icons[status] || '🌤️';
+            }
+            
+            // 电影播放
+            socket.on('movie_play', function(data) {
+                displayMoviePlayer(data);
+            });
+            
+            // 为消息添加唯一标识，用于准确匹配音乐响应
+            let musicRequestCounter = 0;
+            
+            // 存储最近发送的音乐请求信息
+            const recentMusicRequests = [];
+            
+            // 音乐播放响应
+            socket.on('music_response', function(data) {
+                // 查找最近的匹配消息（包含@听音乐的消息）
+                const messages = messagesContainer.querySelectorAll('.message');
+                let targetMessage = null;
+                
+                // 优化查找逻辑：从后往前查找，找到最近且尚未关联音乐播放器的消息
+                for (let i = messages.length - 1; i >= 0; i--) {
+                    const messageUser = messages[i].querySelector('.message-user');
+                    const messageContent = messages[i].querySelector('.message-content');
+                    
+                    // 确保消息没有已添加的音乐播放器，避免重复添加
+                    const existingPlayer = messages[i].querySelector('.music-player');
+                    
+                    if (messageUser && messageUser.textContent === data.username && 
+                        messageContent && (messageContent.textContent.includes('@听音乐') || messageContent.dataset.musicRequest) &&
+                        !existingPlayer) {
+                        targetMessage = messages[i];
+                        break;
+                    }
+                }
+                
+                // 如果找到匹配的消息，在其中插入音乐播放器
+                if (targetMessage && data.music_info) {
+                    insertMusicPlayer(targetMessage, data.music_info);
+                    scrollToBottom();
+                } else {
+                    console.warn('未找到匹配的@听音乐消息或音乐信息无效');
+                }
+            })
+            
+            // 每日新闻响应
+            socket.on('news_response', function(data) {
+                // 添加新闻消息到聊天界面
+                const newsMessage = `
+                    <div class="news-message">
+                        <div class="news-message-header">
+                            <span class="news-date">${data.news_data?.date || ''}</span>
+                            <span class="news-title">每日新闻</span>
+                        </div>
+                        <div class="news-message-content">
+                            <ul class="news-list">
+                                ${data.news_data?.news ? data.news_data.news.map((item, index) => {
+                                    // 处理新闻项，支持对象格式（带search_url）和字符串格式
+                                    let newsTitle = item;
+                                    let searchUrl = null;
+                                    
+                                    if (typeof item === 'object' && item !== null) {
+                                        newsTitle = item.title || item;
+                                        searchUrl = item.search_url;
+                                    }
+                                    
+                                    // 如果有搜索链接，创建可点击的标题
+                                    if (searchUrl) {
+                                        return `
+                                            <li class="news-item">
+                                                <span class="news-number">${index + 1}</span>
+                                                <a href="${searchUrl}" target="_blank" class="news-text" style="color: #1a73e8; text-decoration: none;">
+                                                    ${newsTitle}
+                                                </a>
+                                            </li>
+                                        `;
+                                    } else {
+                                        return `
+                                            <li class="news-item">
+                                                <span class="news-number">${index + 1}</span>
+                                                <span class="news-text">${newsTitle}</span>
+                                            </li>
+                                        `;
+                                    }
+                                }).join('') : '<li>暂无新闻数据</li>'}
+                            </ul>
+                        </div>
+                        ${data.news_data?.tip ? `
+                            <div class="news-message-tip">📝 ${data.news_data.tip}</div>
+                        ` : ''}
+                    </div>
+                `;
+                
+                const aiMessage = document.createElement('div');
+                aiMessage.className = 'ai-message';
+                const now = new Date();
+                const timestamp = now.toLocaleTimeString('zh-CN', { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                aiMessage.innerHTML = `
+                    <div class="ai-bubble">
+                        <div class="ai-name">新闻助手</div>
+                        <div class="ai-content">${newsMessage}</div>
+                        <div class="ai-time">${timestamp}</div>
+                    </div>
+                `;
+                
+                messagesContainer.appendChild(aiMessage);
+                scrollToBottom();
+            });
+            
+            // 请求通知权限
+            if ("Notification" in window) {
+                Notification.requestPermission();
+            }
+            
+            // 页面关闭时断开连接
+            window.addEventListener('beforeunload', function() {
+                socket.emit('leave');
+            });
+        });
+    </script>
+</body>
+</html>

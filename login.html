@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>DaiP智能聊天室 - 登录</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <style>
+        /* 全局样式 */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'PingFang SC', 'Microsoft YaHei', sans-serif;
+        }
+        
+        body {
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #FF9800 0%, #FFC107 100%);
+            overflow: hidden;
+            position: relative;
+        }
+        
+        /* 背景装饰 */
+        body::before,
+        body::after {
+            content: '';
+            position: absolute;
+            width: 300px;
+            height: 300px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            animation: float 8s ease-in-out infinite;
+        }
+        
+        body::before {
+            top: -100px;
+            left: -100px;
+            animation-delay: 0s;
+        }
+        
+        body::after {
+            bottom: -100px;
+            right: -100px;
+            animation-delay: -4s;
+        }
+        
+        @keyframes float {
+            0%, 100% {
+                transform: translate(0, 0);
+            }
+            50% {
+                transform: translate(30px, 30px);
+            }
+        }
+        
+        /* 登录容器样式 */
+        .login-container {
+            max-width: 420px;
+            width: 90%;
+            padding: 40px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+            text-align: center;
+            backdrop-filter: blur(10px);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+            position: relative;
+            z-index: 1;
+        }
+        
+        .login-container:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+        }
+        
+        /* 标题样式 */
+        .login-container h1 {
+            margin-bottom: 30px;
+            color: #333;
+            font-size: 28px;
+            font-weight: 700;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        
+        /* 表单组样式 */
+        .form-group {
+            margin-bottom: 25px;
+            text-align: left;
+            position: relative;
+        }
+        
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 600;
+            font-size: 14px;
+            transition: color 0.3s ease;
+        }
+        
+        /* 输入框样式 */
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 14px 20px;
+            border: 2px solid #e0e0e0;
+            border-radius: 12px;
+            font-size: 16px;
+            transition: all 0.3s ease;
+            background: white;
+        }
+        
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #FF9800;
+            box-shadow: 0 0 0 4px rgba(255, 152, 0, 0.1);
+        }
+        
+        /* 输入框焦点动画 */
+        .form-group input::placeholder {
+            color: #999;
+            transition: color 0.3s ease;
+        }
+        
+        .form-group input:focus::placeholder {
+            color: #FF9800;
+        }
+        
+        /* 按钮样式 */
+        .login-button {
+            width: 100%;
+            padding: 14px;
+            background: linear-gradient(135deg, #FF9800, #FFC107);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .login-button::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.2), transparent);
+            transition: left 0.5s ease;
+        }
+        
+        .login-button:hover::before {
+            left: 100%;
+        }
+        
+        .login-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(255, 152, 0, 0.4);
+        }
+        
+        .login-button:active {
+            transform: translateY(0);
+        }
+        
+        .login-button:disabled {
+            background: #e0e0e0;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+        
+        .login-button:disabled::before {
+            display: none;
+        }
+        
+        /* 错误消息样式 */
+        .error-message {
+            background: linear-gradient(135deg, #f44336, #ff5722);
+            color: white;
+            padding: 12px 20px;
+            border-radius: 12px;
+            margin-bottom: 20px;
+            text-align: center;
+            font-weight: 500;
+            animation: shake 0.5s ease;
+        }
+        
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            10%, 30%, 50%, 70%, 90% { transform: translateX(-5px); }
+            20%, 40%, 60%, 80% { transform: translateX(5px); }
+        }
+        
+        /* 用户名检查样式 */
+        .username-check {
+            margin-top: 8px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s ease;
+        }
+        
+        .username-check.valid {
+            color: #4CAF50;
+        }
+        
+        .username-check.invalid {
+            color: #f44336;
+        }
+        
+        /* 服务器选择区域样式 */
+        .server-selection {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        
+        .server-selection select {
+            flex: 1;
+        }
+        
+        .server-selection button {
+            padding: 14px 16px;
+            min-width: auto;
+            width: auto;
+        }
+        
+        /* 响应式设计 */
+        @media (max-width: 480px) {
+            .login-container {
+                padding: 30px 25px;
+                width: 95%;
+            }
+            
+            .login-container h1 {
+                font-size: 24px;
+            }
+            
+            .form-group input,
+            .form-group select {
+                padding: 12px 16px;
+                font-size: 15px;
+            }
+            
+            .server-selection {
+                flex-direction: column;
+            }
+            
+            .server-selection select,
+            .server-selection button {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container" id="login-container">
+        <h1>DaiP智能聊天室</h1>
+        
+        {% if error %}
+        <div class="error-message">
+            {{ error }}
+        </div>
+        {% endif %}
+        
+        <form id="login-form" action="/login" method="post">
+            <div class="form-group">
+                <label for="username">用户名</label>
+                <input type="text" id="username" name="username" placeholder="请输入用户名" required>
+                <div id="username-check" class="username-check"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">密码</label>
+                <input type="password" id="password" name="password" placeholder="请输入密码" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="server">服务器地址</label>
+                <div class="server-selection">
+                    <select id="server" name="server" required>
+                        <option value="localhost:5000">本地 - localhost:5000</option>
+                        <option value="192.168.1.100:5000">局域网 - 192.168.1.100:5000</option>
+                        {% for server in servers %}
+                        {% if server != 'localhost:5000' and server != '192.168.1.100:5000' %}
+                        <option value="{{ server }}">{{ server }}</option>
+                        {% endif %}
+                        {% endfor %}
+                    </select>
+                    <button type="button" id="refresh-servers" class="login-button">
+                        刷新
+                    </button>
+                </div>
+            </div>
+            
+            <button type="submit" id="login-btn" class="login-button">登录</button>
+        </form>
+        
+        <!-- 切换到注册视图的按钮 -->
+        <div style="margin-top: 20px;">
+            <p>还没有账号？ <a href="javascript:void(0);" id="switch-to-register" style="color: #FF9800; cursor: pointer; font-weight: 600;">点击注册</a></p>
+        </div>
+    </div>
+    
+    <!-- 注册容器 -->
+    <div class="login-container" id="register-container" style="display: none;">
+        <h1>DaiP智能聊天室 - 注册</h1>
+        
+        {% if register_error %}
+        <div class="error-message">
+            {{ register_error }}
+        </div>
+        {% endif %}
+        
+        <form id="register-form" action="/register" method="post">
+            <div class="form-group">
+                <label for="register-username">用户名</label>
+                <input type="text" id="register-username" name="username" placeholder="请输入用户名" required>
+                <div id="register-username-check" class="username-check"></div>
+            </div>
+            
+            <div class="form-group">
+                <label for="register-password">密码</label>
+                <input type="password" id="register-password" name="password" placeholder="请输入密码" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="register-confirm-password">确认密码</label>
+                <input type="password" id="register-confirm-password" placeholder="请再次输入密码" required>
+                <div id="password-match" style="margin-top: 8px; font-size: 13px; font-weight: 500; color: #f44336;"></div>
+            </div>
+            
+            <button type="submit" id="register-btn" class="login-button">注册</button>
+        </form>
+        
+        <!-- 切换回登录视图的按钮 -->
+        <div style="margin-top: 20px;">
+            <p>已有账号？ <a href="javascript:void(0);" id="switch-to-login" style="color: #FF9800; cursor: pointer; font-weight: 600;">点击登录</a></p>
+        </div>
+    </div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script>
+        $(document).ready(function() {
+            const usernameInput = $('#username');
+            const passwordInput = $('#password');
+            const usernameCheck = $('#username-check');
+            const loginBtn = $('#login-btn');
+            
+            // 实时检查用户名和密码是否为空
+            usernameInput.on('input', function() {
+                const username = usernameInput.val().trim();
+                const password = passwordInput.val().trim();
+                
+                if (username.length < 1) {
+                    usernameCheck.text('');
+                }
+                
+                // 只要用户名和密码不为空，就启用登录按钮
+                if (username && password) {
+                    loginBtn.prop('disabled', false);
+                } else {
+                    loginBtn.prop('disabled', true);
+                }
+            });
+            
+            // 密码输入时也检查是否启用登录按钮
+            passwordInput.on('input', function() {
+                const username = usernameInput.val().trim();
+                const password = passwordInput.val().trim();
+                
+                // 只要用户名和密码不为空，就启用登录按钮
+                if (username && password) {
+                    loginBtn.prop('disabled', false);
+                } else {
+                    loginBtn.prop('disabled', true);
+                }
+            });
+            
+            // 表单提交前检查
+            $('#login-form').on('submit', function(e) {
+                const username = usernameInput.val().trim();
+                const password = passwordInput.val().trim();
+                
+                if (!username) {
+                    e.preventDefault();
+                    usernameCheck.text('用户名不能为空');
+                    usernameCheck.removeClass('valid').addClass('invalid');
+                    return;
+                }
+                
+                if (!password) {
+                    e.preventDefault();
+                    alert('密码不能为空');
+                }
+            });
+            
+            // 刷新服务器列表
+            $('#refresh-servers').on('click', function() {
+                const refreshBtn = $(this);
+                const serverSelect = $('#server');
+                const originalText = refreshBtn.text();
+                
+                // 显示加载状态
+                refreshBtn.text('刷新中...').prop('disabled', true);
+                serverSelect.prop('disabled', true);
+                
+                // 调用API获取最新服务器列表
+                $.ajax({
+                    url: '/get_servers',
+                    type: 'GET',
+                    dataType: 'json',
+                    success: function(response) {
+                        // 获取当前选中的值
+                        const selectedValue = serverSelect.val();
+                        
+                        // 清空并重新填充选项
+                        serverSelect.empty();
+                        
+                        // 使用从服务器获取的最新列表
+                        $.each(response.servers, function(index, server) {
+                            const option = $('<option>').val(server).text(server);
+                            // 保留之前的选中状态
+                            if (server === selectedValue) {
+                                option.prop('selected', true);
+                            }
+                            serverSelect.append(option);
+                        });
+                    },
+                    error: function() {
+                        // 错误处理
+                        alert('获取服务器列表失败，请稍后重试');
+                    },
+                    complete: function() {
+                        // 恢复按钮状态
+                        refreshBtn.text(originalText).prop('disabled', false);
+                        serverSelect.prop('disabled', false);
+                    }
+                });
+            });
+        
+        // 视图切换功能
+        $('#switch-to-register').on('click', function() {
+            // 隐藏所有容器
+            $('.login-container').hide();
+            // 只显示注册容器
+            $('#register-container').show();
+        });
+        
+        $('#switch-to-login').on('click', function() {
+            // 隐藏所有容器
+            $('.login-container').hide();
+            // 只显示登录容器
+            $('#login-container').show();
+        });
+        
+        // 确保初始状态只有登录容器显示
+        $(document).ready(function() {
+            $('.login-container').hide();
+            $('#login-container').show();
+        });
+        
+        // 注册表单验证
+        const registerUsernameInput = $('#register-username');
+        const registerPasswordInput = $('#register-password');
+        const registerConfirmPasswordInput = $('#register-confirm-password');
+        const registerUsernameCheck = $('#register-username-check');
+        const passwordMatch = $('#password-match');
+        const registerBtn = $('#register-btn');
+        
+        // 实时检查注册用户名是否可用
+        registerUsernameInput.on('input', function() {
+            const username = $(this).val().trim();
+            
+            if (username.length < 1) {
+                registerUsernameCheck.text('');
+                return;
+            }
+            
+            $.ajax({
+                url: '/check_username',
+                type: 'POST',
+                contentType: 'application/json',
+                data: JSON.stringify({ username: username }),
+                success: function(response) {
+                    if (response.exists) {
+                        registerUsernameCheck.text('用户名已存在');
+                        registerUsernameCheck.removeClass('valid').addClass('invalid');
+                        registerBtn.prop('disabled', true);
+                    } else {
+                        registerUsernameCheck.text('用户名可用');
+                        registerUsernameCheck.removeClass('invalid').addClass('valid');
+                        registerBtn.prop('disabled', false);
+                    }
+                },
+                error: function() {
+                    registerUsernameCheck.text('检查失败，请稍后重试');
+                    registerUsernameCheck.removeClass('valid').addClass('invalid');
+                    registerBtn.prop('disabled', true);
+                }
+            });
+        });
+        
+        // 检查密码是否匹配
+        registerConfirmPasswordInput.on('input', function() {
+            const password = registerPasswordInput.val().trim();
+            const confirmPassword = $(this).val().trim();
+            
+            if (confirmPassword.length < 1) {
+                passwordMatch.text('');
+                return;
+            }
+            
+            if (password === confirmPassword) {
+                passwordMatch.text('密码匹配');
+                passwordMatch.css('color', '#4CAF50');
+            } else {
+                passwordMatch.text('密码不匹配');
+                passwordMatch.css('color', '#f44336');
+            }
+        });
+        
+        // 注册表单提交前检查
+        $('#register-form').on('submit', function(e) {
+            const username = registerUsernameInput.val().trim();
+            const password = registerPasswordInput.val().trim();
+            const confirmPassword = registerConfirmPasswordInput.val().trim();
+            
+            if (!username) {
+                e.preventDefault();
+                registerUsernameCheck.text('用户名不能为空');
+                registerUsernameCheck.removeClass('valid').addClass('invalid');
+                return;
+            }
+            
+            if (!password) {
+                e.preventDefault();
+                alert('密码不能为空');
+                return;
+            }
+            
+            if (password !== confirmPassword) {
+                e.preventDefault();
+                passwordMatch.text('密码不匹配');
+                passwordMatch.css('color', '#f44336');
+                alert('两次输入的密码不一致');
+                return;
+            }
+        });
+    });
+    </script>
+</body>
+</html>
